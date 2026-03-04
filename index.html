@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>大吉國中 204 線上聯絡簿</title>
+    <title>大吉國中 204 線上聯絡簿 - 管理端</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, collection, addDoc, onSnapshot, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // --- 204 班專用 Firebase 設定 ---
         const firebaseConfig = {
@@ -25,91 +24,8 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // --- 204 班學生名單 ---
+        // --- 204 班學生名單 (用於計算未簽名統計) ---
         const students = [{id:1, name:"何睿信"}, {id:2, name:"陳柏翰"}, {id:3, name:"黃明璿"}, {id:4, name:"黃則善"}, {id:5, name:"黃暐翰"}, {id:6, name:"劉栢睿"}, {id:7, name:"林芊惠"}, {id:8, name:"段孟涵"}, {id:9, name:"洪煜晴"}, {id:10, name:"張育慈"}, {id:11, name:"許令霏"}, {id:12, name:"廖以晨"}, {id:13, name:"劉晏妤"}];
-        
-        const sel = document.getElementById('student-sel');
-        students.forEach(s => {
-            const opt = document.createElement('option');
-            opt.value = s.id;
-            opt.textContent = `${s.id}. ${s.name}`;
-            sel.appendChild(opt);
-        });
-
-        // --- 簽名視窗邏輯 ---
-        const sigOverlay = document.getElementById('sig-overlay');
-        const canvas = document.getElementById('canvas');
-        
-        // 初始化簽名板
-        const pad = new SignaturePad(canvas, {
-            minWidth: 3,
-            maxWidth: 5,
-            penColor: 'rgb(0, 0, 0)'
-        });
-        
-        const previewImg = document.getElementById('sig-preview');
-        let isEraser = false;
-
-        window.openSignature = () => {
-            sigOverlay.style.display = 'flex';
-            resizeCanvas();
-            document.body.style.overflow = 'hidden'; 
-            
-            // 重置為畫筆模式
-            isEraser = false;
-            pad.compositeOperation = 'source-over';
-            const btn = document.getElementById('eraser-btn');
-            btn.style.background = '#666';
-            btn.textContent = '🧽 橡皮擦';
-            
-            // 重置粗細
-            const slider = document.querySelector('input[type="range"]');
-            window.changeWidth(slider.value);
-        };
-
-        window.closeSignature = (save) => {
-            if (save && !pad.isEmpty()) {
-                previewImg.src = pad.toDataURL();
-                previewImg.style.display = 'block';
-                document.getElementById('sig-placeholder').style.display = 'none';
-            }
-            sigOverlay.style.display = 'none';
-            document.body.style.overflow = 'auto';
-        };
-
-        window.toggleEraser = () => {
-            isEraser = !isEraser;
-            const btn = document.getElementById('eraser-btn');
-            const slider = document.querySelector('input[type="range"]');
-            
-            if (isEraser) {
-                pad.compositeOperation = 'destination-out';
-                btn.style.background = '#ff4444';
-                btn.textContent = '✏️ 切換畫筆';
-                pad.minWidth = 10;
-                pad.maxWidth = 20;
-            } else {
-                pad.compositeOperation = 'source-over';
-                btn.style.background = '#666';
-                btn.textContent = '🧽 橡皮擦';
-                window.changeWidth(slider.value);
-            }
-        };
-
-        window.changeWidth = (val) => {
-            if (!isEraser) {
-                pad.minWidth = parseFloat(val);
-                pad.maxWidth = parseFloat(val) + 2;
-            }
-        };
-
-        function resizeCanvas() {
-            const ratio = Math.max(window.devicePixelRatio || 1, 1);
-            canvas.width = canvas.offsetWidth * ratio;
-            canvas.height = canvas.offsetHeight * ratio;
-            canvas.getContext("2d").scale(ratio, ratio);
-            pad.clear();
-        }
 
         function getFormattedDate() {
             const now = new Date();
@@ -178,26 +94,7 @@
             }
         });
 
-        window.saveData = async () => {
-            const sid = sel.value;
-            if(!sid || previewImg.style.display === 'none') return alert("請選取座號並完成手寫簽名");
-            try {
-                await addDoc(collection(db, "signatures"), {
-                    sid: sid,
-                    name: students.find(s => s.id == sid).name,
-                    comment: document.getElementById('comment').value,
-                    sig: previewImg.src,
-                    time: new Date().toLocaleString('zh-TW'),
-                    timestamp: Date.now()
-                });
-                alert("儲存成功！");
-                pad.clear();
-                previewImg.style.display = 'none';
-                document.getElementById('sig-placeholder').style.display = 'block';
-                document.getElementById('comment').value = '';
-            } catch(e) { alert("儲存失敗：" + e.message); }
-        };
-
+        // 發布/更新功課
         window.updateHW = async () => {
             const val = document.getElementById('hw-input').value;
             if(!val) return alert("請輸入內容");
@@ -222,7 +119,7 @@
             } catch(e) { alert("更新失敗：" + e.message); }
         };
 
-        // --- 資料讀取邏輯 ---
+        // --- 資料讀取邏輯 (歷史功課 & 簽名統計) ---
         function initAdminListeners() {
             console.log("開始讀取管理資料...");
             const statsArea = document.getElementById('stats-area');
@@ -232,7 +129,7 @@
             statsArea.innerHTML = '<div style="color:blue;">正在連線至資料庫...</div>';
             recordsList.innerHTML = '<div style="color:blue;">正在讀取紀錄...</div>';
 
-            // 1. 歷史功課讀取 (使用前端排序)
+            // 1. 歷史功課讀取
             onSnapshot(collection(db, "history_homework"), (snap) => {
                 const docs = snap.docs.map(d => ({id: d.id, ...d.data()}));
                 docs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
@@ -254,10 +151,9 @@
                 historyArea.innerHTML = `<div style="color:red;">讀取失敗：${error.message}</div>`;
             });
 
-            // 2. 簽名紀錄讀取 (使用前端排序 + 防呆)
+            // 2. 簽名紀錄讀取與統計
             onSnapshot(collection(db, "signatures"), (snap) => {
                 try {
-                    // 過濾無效資料
                     let allData = [];
                     snap.docs.forEach(d => {
                         const data = d.data();
@@ -266,7 +162,7 @@
                         }
                     });
 
-                    // 前端排序
+                    // 前端排序 (新到舊)
                     allData.sort((a, b) => b.timestamp - a.timestamp);
 
                     const range = getStatisticsRange(); 
@@ -339,12 +235,13 @@
                     <b>讀取失敗！</b><br>
                     原因：${error.code}<br>
                     訊息：${error.message}<br><br>
-                    提示：請檢查 Firebase Console > Firestore Database > Rules (規則)。
+                    提示：請檢查 Firebase Console 權限。
                 </div>`;
                 statsArea.innerHTML = "";
             });
         }
 
+        // --- 介面操作功能 ---
         window.toggleAllSigs = (source) => {
             const checkboxes = document.querySelectorAll('.sig-checkbox');
             checkboxes.forEach(cb => cb.checked = source.checked);
@@ -370,9 +267,11 @@
             await updateDoc(doc(db, "history_homework", id), { content: newContent });
             alert("已修正");
         };
+
         window.deleteHW = async (id) => {
             if(confirm("確定刪除功課歷史？")) await deleteDoc(doc(db, "history_homework", id));
         };
+
         window.deleteSig = async (id) => {
             if(confirm("確定永久刪除此簽名紀錄？")) await deleteDoc(doc(db, "signatures", id));
         };
@@ -390,8 +289,6 @@
                 box.style.display = 'block';
             }
         };
-
-        window.onresize = resizeCanvas;
         
         // 網頁載入後，直接執行管理後台的資料讀取功能
         initAdminListeners();
@@ -410,16 +307,9 @@
         .btn { background-color: var(--muji-charcoal); color: white; border: none; padding: 18px; cursor: pointer; width: 100%; font-size: 20px; border-radius: 6px; font-weight: 700; margin-top: 10px; }
         .btn-history { background: none; border: 2px solid #888; color: #888; font-size: 16px; height: 50px; }
         #history-box { display: none; padding: 15px; background: #f9f9f9; border-radius: 4px; border: 1px solid #ddd; margin-top: 10px; }
-        .admin-area { margin-top: 40px; padding: 20px; background: #eef2f3; border-radius: 8px; border: 2px solid #ccc; }
+        .admin-area { margin-top: 20px; padding: 20px; background: #eef2f3; border-radius: 8px; border: 2px solid #ccc; }
         .record-card, .edit-card { background: white; border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .sig-preview-box { border: 2px dashed #bbb; background: #fafafa; border-radius: 6px; min-height: 120px; display: flex; align-items: center; justify-content: center; cursor: pointer; margin-top: 10px; overflow: hidden; }
-        .sig-preview-box img { max-height: 150px; }
-        #sig-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 1000; display: none; flex-direction: column; }
-        .sig-header { padding: 15px; background: #f2f0eb; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; }
-        .sig-controls { padding: 10px; background: #eee; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; }
-        .sig-canvas-wrap { flex: 1; position: relative; background: #fff; cursor: crosshair; }
-        canvas { width: 100%; height: 100%; touch-action: none; }
-        .control-btn { padding: 8px 15px; border: none; border-radius: 4px; color: white; cursor: pointer; font-weight: bold; }
+        .hist-item { border-bottom: 1px solid #eee; padding: 10px 0; font-size: 0.9em; }
         label { font-weight: 700; display: block; margin-top: 15px; }
     </style>
 </head>
@@ -427,7 +317,7 @@
 <div class="container">
     <div style="text-align: center;">
         <h2 style="margin:0;">大吉國中 二年四班</h2>
-        <h1 style="margin:5px 0 20px 0;">線上聯絡簿</h1>
+        <h1 style="margin:5px 0 20px 0;">線上聯絡簿 - 管理端</h1>
     </div>
 
     <div class="blackboard">
@@ -438,24 +328,6 @@
 
     <button class="btn btn-history" onclick="toggleHistory()">📂 查看歷史功課 (展開/收起)</button>
     <div id="history-box"></div>
-
-    <hr style="margin: 30px 0; border: 0; border-top: 2px solid #eee;">
-
-    <h3 style="border-left: 6px solid #333; padding-left: 12px;">家長簽名區域</h3>
-    
-    <label>1. 選擇學生座號</label>
-    <select id="student-sel" style="width:100%; padding:14px; font-size:18px; border-radius:6px; border:1px solid #ccc;"></select>
-
-    <label>2. 家長留言 (選填)</label>
-    <textarea id="comment" rows="2" style="width:100%; padding:14px; font-size:18px; border-radius:6px; border:1px solid #ccc;"></textarea>
-
-    <label>3. 家長手寫簽名</label>
-    <div class="sig-preview-box" onclick="openSignature()">
-        <span id="sig-placeholder" style="color: #888;">點擊此處開啟簽名畫面</span>
-        <img id="sig-preview" src="" style="display: none;">
-    </div>
-
-    <button class="btn" onclick="saveData()">確認儲存並送出</button>
 
     <div id="admin-panel" class="admin-area">
         <h2 style="text-align:center; color:#333;">教師/幹部管理後台</h2>
@@ -474,28 +346,5 @@
         </div>
     </div>
 </div>
-
-<div id="sig-overlay">
-    <div class="sig-header">
-        <button onclick="closeSignature(false)" style="background: #ccc; border:none; padding:10px; border-radius:5px;">取消</button>
-        <strong style="font-size: 1.2em;">家長簽名畫面</strong>
-        <button onclick="closeSignature(true)" style="background: #333; color:white; border:none; padding:10px 20px; border-radius:5px;">完成</button>
-    </div>
-    <div class="sig-controls">
-        <div style="display:flex; align-items:center; gap:5px;">
-            <small>粗細:</small>
-            <input type="range" min="1" max="10" value="3" oninput="changeWidth(this.value)">
-        </div>
-        <button id="eraser-btn" class="control-btn" style="background: #666;" onclick="toggleEraser()">🧽 橡皮擦</button>
-        <button class="control-btn" style="background: #888;" onclick="pad.clear()">🗑️ 全部清除</button>
-    </div>
-    <div class="sig-canvas-wrap">
-        <canvas id="canvas"></canvas>
-    </div>
-    <div style="padding: 10px; text-align: center; color: #666; font-size: 0.9em; background: #f9f9f9;">
-        請在空白處書寫姓名
-    </div>
-</div>
-
 </body>
 </html>
