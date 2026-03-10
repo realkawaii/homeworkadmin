@@ -206,8 +206,8 @@
                         const statsRecords = allData.filter(r => r.timestamp >= range.start && r.timestamp < range.end);
                         const signedIds = statsRecords.map(r => parseInt(r.sid));
                         
-                        // 排除特定學生不列入未簽名名單
-                        const excludedNames = ["洪煜晴", "劉晏妤"];
+                        // 排除特定學生不列入未簽名名單 (已將 劉栢睿、許令霏 加入排除清單)
+                        const excludedNames = ["洪煜晴", "劉晏妤", "劉栢睿", "許令霏"];
                         const unsigned = students.filter(s => !signedIds.includes(s.id) && !excludedNames.includes(s.name));
 
                         statsArea.innerHTML = `
